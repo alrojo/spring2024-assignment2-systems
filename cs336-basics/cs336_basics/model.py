@@ -11,10 +11,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import cs336_systems.triton.RMSNormTriton as RMSNormTriton
+
 from .nn_utils import softmax
 
 logger = logging.getLogger(__name__)
-
 
 class RMSNorm(nn.Module):
     """
@@ -94,6 +95,7 @@ class BasicsTransformerLM(nn.Module):
         d_ff: int,
         attn_pdrop: Optional[float] = None,
         residual_pdrop: Optional[float] = None,
+        rms_layer_triton: int = 0
     ):
         # Store the model configuration for serialization / deserialization
         self.config = {
@@ -102,6 +104,15 @@ class BasicsTransformerLM(nn.Module):
             if k != "self" and not (k.startswith("__") and k.endswith("__"))
         }
         super().__init__()
+        if rms_layer_triton == 0:
+            norm_layer = RMSNorm
+        elif rms_layer_triton == 1:
+            norm_layer = nn.LayerNorm
+        elif rms_layer_triton == 2:
+            norm_layer = RMSNormTriton
+        else:
+            assert False
+            
         self.context_length = context_length
         self.d_model = d_model
         self.token_embeddings = nn.Embedding(vocab_size, d_model)
@@ -114,11 +125,12 @@ class BasicsTransformerLM(nn.Module):
                     d_ff=d_ff,
                     attn_pdrop=attn_pdrop,
                     residual_pdrop=residual_pdrop,
+                    use_rms_norm=use_rms_norm
                 )
                 for _ in range(num_layers)
             ]
         )
-        self.ln_final = RMSNorm(d_model)
+        self.ln_final = norm_layer(d_model)
         self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
         # Tie the weights, since the paper mentions that "we share the same weight
         # matrix between the two embedding layers and the pre-softmax linear transformation"
@@ -287,16 +299,18 @@ class TransformerBlock(nn.Module):
         d_ff: int,
         attn_pdrop: Optional[float] = None,
         residual_pdrop: Optional[float] = None,
+        use_rms_norm: bool = True
     ):
         super().__init__()
+        norm_layer = RMSNorm if use_rms_norm else nn.LayerNorm
         self.attn = CausalMultiHeadSelfAttention(
             d_model=d_model,
             num_heads=num_heads,
             attn_pdrop=attn_pdrop,
         )
-        self.ln1 = RMSNorm(d_model)
+        self.ln1 = norm_layer(d_model)
         self.ffn = FFN(d_model=d_model, d_ff=d_ff)
-        self.ln2 = RMSNorm(d_model)
+        self.ln2 = norm_layer(d_model)
         self.residual_pdrop = residual_pdrop
 
     def forward(self, x: torch.Tensor):
