@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import cs336_systems.triton.RMSNormTriton as RMSNormTriton
+from cs336_systems.my_triton import RMSNormTriton
 
 from .nn_utils import softmax
 
@@ -54,6 +54,7 @@ class RMSNorm(nn.Module):
         x = x * rms
         return self.weight * x
 
+NormTypes = {"rms": RMSNorm, "layer": nn.LayerNorm, "triton": RMSNormTriton, "compile_rms": RMSNorm}
 
 class BasicsTransformerLM(nn.Module):
     """A Transformer language model.
@@ -95,7 +96,7 @@ class BasicsTransformerLM(nn.Module):
         d_ff: int,
         attn_pdrop: Optional[float] = None,
         residual_pdrop: Optional[float] = None,
-        rms_layer_triton: int = 0
+        norm_layer_type: str = "rms"
     ):
         # Store the model configuration for serialization / deserialization
         self.config = {
@@ -103,15 +104,9 @@ class BasicsTransformerLM(nn.Module):
             for k, v in locals().items()
             if k != "self" and not (k.startswith("__") and k.endswith("__"))
         }
+        norm_layer = NormTypes[norm_layer_type]
+
         super().__init__()
-        if rms_layer_triton == 0:
-            norm_layer = RMSNorm
-        elif rms_layer_triton == 1:
-            norm_layer = nn.LayerNorm
-        elif rms_layer_triton == 2:
-            norm_layer = RMSNormTriton
-        else:
-            assert False
             
         self.context_length = context_length
         self.d_model = d_model
@@ -125,12 +120,14 @@ class BasicsTransformerLM(nn.Module):
                     d_ff=d_ff,
                     attn_pdrop=attn_pdrop,
                     residual_pdrop=residual_pdrop,
-                    use_rms_norm=use_rms_norm
+                    norm_layer_type=norm_layer_type
                 )
                 for _ in range(num_layers)
             ]
         )
         self.ln_final = norm_layer(d_model)
+        if norm_layer_type == "compile_rms":
+            self.ln_final = torch.compile(self.ln_final)
         self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
         # Tie the weights, since the paper mentions that "we share the same weight
         # matrix between the two embedding layers and the pre-softmax linear transformation"
@@ -299,10 +296,10 @@ class TransformerBlock(nn.Module):
         d_ff: int,
         attn_pdrop: Optional[float] = None,
         residual_pdrop: Optional[float] = None,
-        use_rms_norm: bool = True
+        norm_layer_type: str = "rms"
     ):
         super().__init__()
-        norm_layer = RMSNorm if use_rms_norm else nn.LayerNorm
+        norm_layer = NormTypes[norm_layer_type]
         self.attn = CausalMultiHeadSelfAttention(
             d_model=d_model,
             num_heads=num_heads,
@@ -312,6 +309,9 @@ class TransformerBlock(nn.Module):
         self.ffn = FFN(d_model=d_model, d_ff=d_ff)
         self.ln2 = norm_layer(d_model)
         self.residual_pdrop = residual_pdrop
+        if norm_layer_type == "compile_rms":
+            self.ln1 = torch.compile(self.ln1)
+            self.ln2 = torch.compile(self.ln2)
 
     def forward(self, x: torch.Tensor):
         """

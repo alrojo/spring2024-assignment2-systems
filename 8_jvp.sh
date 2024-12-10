@@ -1,0 +1,5 @@
+#!/bin/bash
+pytest -k test_rmsnorm_backward_g_pytorch
+pytest -k test_rmsnorm_backward_x_pytorch
+pytest -k test_rmsnorm_autograd_pytorch_forward_backward
+pytest -k test_rmsnorm_autograd_triton_forward_backward

@@ -6,19 +6,19 @@ from cs336_basics.model import BasicsTransformerLM
 from cs336_basics.optimizer import AdamW
 parser = argparse.ArgumentParser(description="A simple example of argparse usage.")
 parser.add_argument("--model", type=str, required=True, help="small, medium, large, xl, 2.7B")
-parser.add_argument("--device", type=int, required=True, help="device no. in integer")
+parser.add_argument("--device", type=str, required=True, help="device no. in integer")
 parser.add_argument("--backward_pass", type=int, required=True, help="to run backwards pass")
 parser.add_argument("--mixed_precision", type=int, default=0, help="mixed vs full precision")
-parser.add_argument("--use_rms_norm", type=int, default=1, help="RMSNorm vs LayerNorm")
+parser.add_argument("--norm_layer_type", type=str, default="rms", help="rms, layer, triton")
 args = parser.parse_args()
 
 # Parse the arguments
 VOCAB_SIZE=10000
-BATCH_SIZE=4
+BATCH_SIZE=16
 CONTEXT_LENGTH=128
-DROP=0.05
+DROP=0.0
 LR = 1e-3
-WARM_UP_STEPS = 2
+WARM_UP_STEPS = 1
 NUM_EVALS = 5
 configs = {
 	"small":{"d_model": 768, "d_ff": 3072, "num_layers": 12, "num_heads": 12},
@@ -40,7 +40,7 @@ model = BasicsTransformerLM(
         d_ff=config["d_ff"],
         attn_pdrop=DROP,
         residual_pdrop=DROP,
-        use_rms_norm=bool(args.use_rms_norm)
+        norm_layer_type=args.norm_layer_type
 )
 optimizer = AdamW(model.parameters())
 # generate data
@@ -56,28 +56,23 @@ if args.mixed_precision:
 else:
     train_context = nullcontext()
 
-if args.device != -1:
-    X, y = X.to(args.device), y.to(args.device)
-    model.to(args.device)
+X, y = X.to(args.device), y.to(args.device)
+model.to(args.device)
 
 def forward():
-    if args.device != -1:
-        torch.cuda.synchronize()
+    torch.cuda.synchronize()
     logits = model(X)
     loss = cross_entropy(logits, y)
-    if args.device != -1:
-        torch.cuda.synchronize()
+    torch.cuda.synchronize()
     return loss
 
 def backward(loss):
-    if args.device != -1:
-        torch.cuda.synchronize()
+    torch.cuda.synchronize()
     optimizer.zero_grad()
     loss.backward()
     clip_gradient(model.parameters(), 1.0)
     optimizer.step()
-    if args.device != -1:
-        torch.cuda.synchronize()
+    torch.cuda.synchronize()
 
 def data_pass(backward_pass = True):
     loss = forward()
@@ -85,13 +80,13 @@ def data_pass(backward_pass = True):
         backward(loss)
 
 for i in range(WARM_UP_STEPS):
-    print("warm-up %d" % i)
+    #print("warm-up %d" % i)
     data_pass(args.backward_pass)
 
 # setup timer on data_pass
 times = []
 for i in range(NUM_EVALS):
-    print("eval %d" % i)
+    #print("eval %d" % i)
     start_time = time.time()
     with train_context:
         data_pass(args.backward_pass)
@@ -100,8 +95,8 @@ for i in range(NUM_EVALS):
 avg_time = sum(times) / NUM_EVALS
 std_time = np.std(times)
 bw = "with" if args.backward_pass else "without"
-statement = ("Running %s model %s Backward pass for an average of %.2f"
-             "seconds per iteration with a standard deviation of %.2f" % (
-                args.model, bw, avg_time, std_time)
+statement = ("Running %s model %s Backward pass with %s norm layer for an average of %.4f"
+             "seconds per iteration with a standard deviation of %.4f" % (
+                args.model, bw, args.norm_layer_type, avg_time, std_time)
             )
 print(statement)
