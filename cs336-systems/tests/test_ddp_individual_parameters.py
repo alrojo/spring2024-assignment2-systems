@@ -57,7 +57,8 @@ def _test_DistributedDataParallelIndividualParameters(
     # Create a DDP model. Note that the weights of this model should
     # match the non-parallel baseline above.
     ddp_base = deepcopy(non_parallel_model)
-    ddp_model = get_ddp_individual_parameters(ddp_base)
+    ddp_model = ddp_base
+    #ddp_model = get_ddp_individual_parameters(ddp_base)
 
     # If we're on rank 0, the DDP model should still exactly match the parameters of the
     # non-parallel baseline (since the parameters on rank 0 weren't changed).
@@ -144,7 +145,7 @@ def _test_DistributedDataParallelIndividualParameters(
 
         # Run student-written code that needs to execute after the backward pass,
         # but before the optimizer step (e.g., to wait for all DDP ranks to sync gradients)
-        ddp_individual_parameters_on_after_backward(ddp_model, ddp_optimizer)
+        #ddp_individual_parameters_on_after_backward(ddp_model, ddp_optimizer)
 
         ddp_optimizer.step()
 

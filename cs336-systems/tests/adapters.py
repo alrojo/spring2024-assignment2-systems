@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Type
 from cs336_systems.my_triton import RMSNormTriton, RMSNormAutogradFuncTriton, RMSNormAutogradFuncTorch
+from cs336_systems.ddp_overlap_individual_parameters import DDPWrapper
 
 import torch
 
@@ -95,8 +96,7 @@ def get_ddp_individual_parameters(module: torch.nn.Module) -> torch.nn.Module:
     Returns:
         Instance of a DDP class.
     """
-    # For example: return DDPIndividualParameters(module)
-    raise NotImplementedError
+    return DDPWrapper(module)
 
 
 def ddp_individual_parameters_on_after_backward(
@@ -112,8 +112,7 @@ def ddp_individual_parameters_on_after_backward(
         optimizer: torch.optim.Optimizer
             Optimizer being used with the DDP-wrapped model.
     """
-    # For example: ddp_model.finish_gradient_synchronization()
-    raise NotImplementedError
+    ddp_model.finish_gradient_synchronization()
 
 
 def get_ddp_bucketed(module: torch.nn.Module, bucket_size_mb: float) -> torch.nn.Module:

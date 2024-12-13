@@ -1,0 +1,5 @@
+MASTER_PORT: 15003
+MASTER_ADDR: sgiuv300-srcf-d10-01
+World size: 1, global rank: 0, local rank: 0, local world size: 1device: cuda:0
+rank 0 data (before all-reduce): tensor([1., 1., 1., 1., 1.], device='cuda:0')
+rank 0 data (after all-reduce): tensor([1., 1., 1., 1., 1.], device='cuda:0')
