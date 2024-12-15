@@ -4,6 +4,7 @@
 #SBATCH --nodes=2
 #SBATCH --mem=8G
 #SBATCH --time=00:02:00
+#SBATCH --partition=normal
 
 # Activate conda environment
 eval "$(conda shell.bash hook)"

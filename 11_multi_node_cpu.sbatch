@@ -1,9 +1,10 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=4
-#SBATCH --ntasks-per-node=3
-#SBATCH --nodes=3
-#SBATCH --mem=8G
-#SBATCH --time=00:10:00
+#SBATCH --ntasks-per-node=1
+#SBATCH --nodes=2
+#SBATCH --mem-per-cpu=5G
+#SBATCH --time=00:06:00
+#SBATCH --partition=normal
 # Activate conda environment
 eval "$(conda shell.bash hook)"
 # Change conda environment name, if necessary

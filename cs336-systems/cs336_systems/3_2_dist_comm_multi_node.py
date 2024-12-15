@@ -1,8 +1,12 @@
 import os
+import argparse
 from time import time
 from datetime import timedelta
 import torch
 import torch.distributed as dist
+parser = argparse.ArgumentParser(description="A simple example of argparse usage.")
+parser.add_argument("--gpu", type=int, default=0, help="gpu usage, default none")
+args = parser.parse_args()
 
 def print_bytes(num_bytes):
     if num_bytes < 2**20:
@@ -59,6 +63,9 @@ def multinode_distributed_all_reduce(backend, device, byte_size):
 
 if __name__ == "__main__":
     byte_sizes = [2**19, 2**20, 2**23, 2**25, 2**26, 2**29, 2**30]
-    for (device, backend) in [("cpu", "gloo")]:#, ("cuda", "gloo"), ("cuda", "nccl")]:
+    my_list = [("cpu", "gloo")]
+    if args.gpu:
+        my_list = [("cuda", "gloo"), ("cuda", "nccl")]
+    for (device, backend) in my_list:
         for byte_size in byte_sizes:
             multinode_distributed_all_reduce(backend, device, byte_size)
